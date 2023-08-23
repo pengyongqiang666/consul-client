@@ -50,18 +50,8 @@ public class BlacklistingConsulFailoverStrategy implements ConsulFailoverStrateg
 
 				// If we have blacklisted this key
 				if (blacklist.containsKey(target)) {
-
-					// Get when we blacklisted this key
-					final Instant blacklistWhen = blacklist.get(target);
-
-					// If !(Duration(then, now) - timeout >=0) means that we remove this blacklist
-					// entry when the duration between
-					// the blacklist marker and now is greater than the timeout duration
-					if (!Duration.between(blacklistWhen, Instant.now()).minusMillis(timeout).isNegative()) {
-						blacklist.remove(target);
-						return true;
-					} else
-						return false;
+					// Attempt to remove from the blacklist.
+					return attemptRemove(target);
 				} else
 					return true;
 			}).findAny();
@@ -91,7 +81,7 @@ public class BlacklistingConsulFailoverStrategy implements ConsulFailoverStrateg
 
 	@Override
 	public boolean isRequestViable(Request current) {
-		return (targets.size() > blacklist.size()) || !blacklist.containsKey(fromRequest(current));
+		return (targets.size() > blacklist.size()) || !blacklist.containsKey(fromRequest(current)) || attemptRemove(fromRequest(current));
 	}
 
 	@Override
@@ -106,6 +96,25 @@ public class BlacklistingConsulFailoverStrategy implements ConsulFailoverStrateg
 	 */
 	private HostAndPort fromRequest(Request request) {
 		return HostAndPort.fromParts(request.url().host(), request.url().port());
+	}
+	
+	/**
+	 * Attempt to remove HostAndPort entries that have timed out from the blacklist.
+	 * @param target
+	 * @return
+	 */
+	private boolean attemptRemove(HostAndPort target) {
+		// Get when we blacklisted this key
+		final Instant blacklistWhen = blacklist.get(target);
+
+		// If !(Duration(then, now) - timeout >=0) means that we remove this blacklist
+		// entry when the duration between
+		// the blacklist marker and now is greater than the timeout duration
+		if (!Duration.between(blacklistWhen, Instant.now()).minusMillis(timeout).isNegative()) {
+			blacklist.remove(target);
+			return true;
+		} else
+			return false;
 	}
 
 }
